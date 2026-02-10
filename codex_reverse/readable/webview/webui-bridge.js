@@ -12,6 +12,7 @@
   let reconnectTimer = null;
   let socket = null;
   let isOpen = false;
+  let activeSocketToken = 0;
 
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const wsPath =
@@ -71,6 +72,7 @@
   };
 
   const scheduleReconnect = () => {
+    if (socket && socket.readyState === WebSocket.OPEN) return;
     if (reconnectTimer != null) return;
     const delay = Math.min(
       reconnectMaxMs,
@@ -84,13 +86,24 @@
   };
 
   const connect = () => {
-    socket = new WebSocket(wsUrl.toString());
-    socket.addEventListener("open", () => {
+    if (
+      socket &&
+      (socket.readyState === WebSocket.CONNECTING ||
+        socket.readyState === WebSocket.OPEN)
+    ) {
+      return;
+    }
+    const currentToken = ++activeSocketToken;
+    const nextSocket = new WebSocket(wsUrl.toString());
+    socket = nextSocket;
+    nextSocket.addEventListener("open", () => {
+      if (currentToken !== activeSocketToken) return;
       isOpen = true;
       reconnectAttempt = 0;
       flushQueue();
     });
-    socket.addEventListener("message", (event) => {
+    nextSocket.addEventListener("message", (event) => {
+      if (currentToken !== activeSocketToken) return;
       let packet;
       try {
         packet = JSON.parse(String(event.data));
@@ -99,13 +112,15 @@
       }
       handleInboundPacket(packet);
     });
-    socket.addEventListener("close", () => {
+    nextSocket.addEventListener("close", () => {
+      if (currentToken !== activeSocketToken) return;
+      socket = null;
       isOpen = false;
       scheduleReconnect();
     });
-    socket.addEventListener("error", () => {
+    nextSocket.addEventListener("error", () => {
+      if (currentToken !== activeSocketToken) return;
       isOpen = false;
-      scheduleReconnect();
     });
   };
 

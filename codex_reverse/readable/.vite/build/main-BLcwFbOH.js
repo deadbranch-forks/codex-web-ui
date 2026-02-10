@@ -74063,6 +74063,15 @@ class dpe {
             type: "app-update-ready-changed",
             isUpdateReady: this.sparkleManager.getIsUpdateReady(),
           }),
+          e.send(bt, {
+            type: "ipc-broadcast",
+            method: "client-status-changed",
+            sourceClientId: "desktop",
+            version: Fs("client-status-changed"),
+            params: {
+              status: "connected",
+            },
+          }),
           qt().info("Handled 'ready' message, sent ide-context-updated"));
         break;
       }
@@ -87280,7 +87289,44 @@ async function webUiInvokeElectronBridgeMethod(t, e, n) {
 }
 async function webUiStartBridgeRuntime({ bridgeWindow: t, context: e }) {
   const n = require("node:http"),
-    r = require("mime-types"),
+    r = (() => {
+      try {
+        return require("mime-types");
+      } catch {
+        return {
+          lookup(B) {
+            const j = path2.extname(B).toLowerCase();
+            return j === ".html"
+              ? "text/html"
+              : j === ".js" || j === ".mjs"
+                ? "application/javascript"
+                : j === ".css"
+                  ? "text/css"
+                  : j === ".json"
+                    ? "application/json"
+                    : j === ".svg"
+                      ? "image/svg+xml"
+                      : j === ".png"
+                        ? "image/png"
+                        : j === ".jpg" || j === ".jpeg"
+                          ? "image/jpeg"
+                          : j === ".gif"
+                            ? "image/gif"
+                            : j === ".webp"
+                              ? "image/webp"
+                              : j === ".ico"
+                                ? "image/x-icon"
+                                : j === ".map"
+                                  ? "application/json"
+                                  : j === ".txt"
+                                    ? "text/plain"
+                                    : j === ".wasm"
+                                      ? "application/wasm"
+                                      : null;
+          },
+        };
+      }
+    })(),
     { WebSocketServer: i, WebSocket: a } = require("ws"),
     o = path2.join(kl, "webview"),
     s = webUiOptions.remote ? "0.0.0.0" : "127.0.0.1",
@@ -87452,12 +87498,18 @@ async function webUiStartBridgeRuntime({ bridgeWindow: t, context: e }) {
       }));
     let j = Date.now(),
       X = 0;
+    const VtLimit = webUiOptions.remote ? 240 : 5e3;
     B.on("message", async (V) => {
       const Z = Date.now();
       if (Z - j > 6e4) {
         ((j = Z), (X = 0));
       }
-      if (((X += 1), X > 240)) {
+      if (((X += 1), X > VtLimit)) {
+        Xt().warning("WebUI inbound rate limit exceeded", {
+          count: X,
+          limit: VtLimit,
+          remote: webUiOptions.remote,
+        });
         B.close(1008, "Rate limit exceeded");
         return;
       }
