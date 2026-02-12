@@ -68,6 +68,22 @@
     }
     if (packet.kind === "bridge-error") {
       console.warn("Codex WebUI bridge error", packet.message ?? "unknown");
+      return;
+    }
+    if (packet.kind === "open-new-instance") {
+      if (typeof packet.url === "string" && packet.url.length > 0) {
+        try {
+          const target = new URL(packet.url, window.location.href);
+          target.pathname = window.location.pathname;
+          target.search = window.location.search;
+          target.hash = window.location.hash;
+          if (target.toString() !== window.location.toString()) {
+            window.location.replace(target.toString());
+          }
+        } catch (error) {
+          console.warn("Codex WebUI open-new-instance redirect failed", error);
+        }
+      }
     }
   };
 

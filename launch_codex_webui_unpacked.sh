@@ -4,18 +4,7 @@ set -euo pipefail
 APP_PATH="/Applications/Codex.app"
 APP_ASAR="$APP_PATH/Contents/Resources/app.asar"
 CLI_PATH="$APP_PATH/Contents/Resources/codex"
-# Derive a deterministic port from the running directory path.
-# Hash the absolute path of the current working directory and map it into
-# the range 10000-59999 so each project directory gets its own port by default.
-_dir_hash_port() {
-  local dir_path
-  dir_path="$(pwd -P)"
-  # Use a simple portable hash: sum of bytes mod range + base
-  local hash
-  hash=$(printf '%s' "$dir_path" | cksum | awk '{print $1}')
-  echo $(( (hash % 50000) + 10000 ))
-}
-PORT="${CODEX_WEBUI_PORT:-$(_dir_hash_port)}"
+PORT="${CODEX_WEBUI_PORT:-5999}"
 REMOTE=0
 TOKEN=""
 ORIGINS=""
@@ -31,7 +20,7 @@ Usage:
 
 Options:
   --app <path>           Codex.app path
-  --port <n>             webui port (default: 4310)
+  --port <n>             webui port (default: 5999)
   --remote               pass --remote
   --token <value>        pass --token for remote mode auth
   --origins <csv>        pass --origins allowlist
@@ -56,19 +45,10 @@ write_main_injection_chunk() {
     return Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : fallback;
   }
 
-  function webUiDirHashPort(dirPath) {
-    // Derive a deterministic port from a directory path.
-    // Mirrors the bash _dir_hash_port logic: sum bytes, mod 50000, + 10000.
-    let hash = 0;
-    const buf = Buffer.from(dirPath || process.cwd());
-    for (let i = 0; i < buf.length; i++) hash = (hash + buf[i]) | 0;
-    return ((((hash % 50000) + 50000) % 50000) + 10000);
-  }
-
   function webUiParseCliOptions(argv = process.argv, env = process.env) {
     let enabled = false;
     let remote = false;
-    let port = webUiParsePortArg(env.CODEX_WEBUI_PORT, webUiDirHashPort(process.cwd()));
+    let port = webUiParsePortArg(env.CODEX_WEBUI_PORT, 3210);
     let token = (env.CODEX_WEBUI_TOKEN ?? "").trim();
     let origins = (env.CODEX_WEBUI_ORIGINS ?? "")
       .split(",")
@@ -124,6 +104,34 @@ write_main_injection_chunk() {
   const path = require("node:path");
   const crypto = require("node:crypto");
   const { EventEmitter } = require("node:events");
+  function webUiFormatError(err) {
+    if (!err) return "Unknown error";
+    if (typeof err === "string") return err;
+    if (typeof err.message === "string" && err.message.length > 0) return err.message;
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+  const webUiLogger = (() => {
+    try {
+      if (typeof Xt === "function") {
+        const logger = Xt();
+        if (logger && typeof logger.info === "function" && typeof logger.warning === "function") {
+          return logger;
+        }
+      }
+    } catch {}
+    return {
+      info(message, data) {
+        console.info(`[webui] ${message}`, data ?? "");
+      },
+      warning(message, data) {
+        console.warn(`[webui] ${message}`, data ?? "");
+      },
+    };
+  })();
 
   class WebUiSocket extends EventEmitter {
     constructor(socket) {
@@ -421,6 +429,21 @@ write_main_injection_chunk() {
     return windowRef.webContents.executeJavaScript(code, true);
   }
 
+  async function webUiDispatchMessageFromView(bridgeWindow, context, payload) {
+    // Prefer the renderer bridge API; it is stable across minified builds.
+    const bridged = await webUiInvokeElectronBridgeMethod(bridgeWindow, "sendMessageFromView", [
+      payload,
+    ]);
+    if (bridged !== null) return;
+
+    // Fallback for older/newer app internals.
+    if (context && typeof context.handleMessage === "function") {
+      await context.handleMessage(bridgeWindow.webContents, payload);
+      return;
+    }
+    throw new Error("No message dispatch handler available for WebUI bridge");
+  }
+
   async function waitForPrimaryWindow(timeoutMs = 30000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -431,8 +454,37 @@ write_main_injection_chunk() {
     return null;
   }
 
+  function webUiForceWindowHidden(win) {
+    if (!win || win.isDestroyed()) return;
+    const hideNow = () => {
+      try {
+        win.hide();
+      } catch {}
+    };
+
+    hideNow();
+
+    if (!win.__codexWebUiShowPatched) {
+      win.__codexWebUiShowPatched = true;
+      if (typeof win.show === "function") {
+        win.show = () => {
+          hideNow();
+        };
+      }
+      if (typeof win.showInactive === "function") {
+        win.showInactive = () => {
+          hideNow();
+        };
+      }
+    }
+
+    win.on("show", () => {
+      setTimeout(hideNow, 0);
+    });
+  }
+
   async function webUiStartBridgeRuntime({ bridgeWindow, context }) {
-    const assetRoot = path.join(kl, "webview");
+    const assetRoot = path.join(L.app.getAppPath(), "webview");
     const host = webUiOptions.remote ? "0.0.0.0" : "127.0.0.1";
     const authRequired = webUiOptions.remote || !!webUiOptions.token;
     const token =
@@ -465,8 +517,8 @@ write_main_injection_chunk() {
         if (ws.readyState !== WebUiSocket.OPEN) continue;
         ws.send(serialized, (err) => {
           if (err) {
-            Xt().warning("WebUI socket send failed", {
-              message: we(err),
+            webUiLogger.warning("WebUI socket send failed", {
+              message: webUiFormatError(err),
             });
           }
         });
@@ -578,8 +630,8 @@ write_main_injection_chunk() {
 
             fs.createReadStream(assetPath)
               .on("error", (err) => {
-                Xt().warning("WebUI static stream failed", {
-                  message: we(err),
+                webUiLogger.warning("WebUI static stream failed", {
+                  message: webUiFormatError(err),
                 });
                 if (!res.headersSent) {
                   res.statusCode = 500;
@@ -642,13 +694,26 @@ write_main_injection_chunk() {
       }
 
       wss.handleUpgrade(req, socket, head, (ws) => {
+        // Single active client policy: newer tab takes over and prior tabs are disconnected.
+        for (const existing of sockets) {
+          try {
+            existing.send(
+              JSON.stringify({
+                kind: "bridge-error",
+                message: "Another tab took over this session",
+              }),
+            );
+            existing.close(1012, "Replaced by newer client tab");
+          } catch {}
+        }
+
         sockets.add(ws);
         ws.on("close", () => {
           sockets.delete(ws);
         });
         ws.on("ws-error", (err) => {
-          Xt().warning("WebUI socket error", {
-            message: we(err),
+          webUiLogger.warning("WebUI socket error", {
+            message: webUiFormatError(err),
           });
         });
 
@@ -664,7 +729,7 @@ write_main_injection_chunk() {
           }
           count += 1;
           if (count > inboundLimit) {
-            Xt().warning("WebUI inbound rate limit exceeded", {
+            webUiLogger.warning("WebUI inbound rate limit exceeded", {
               count,
               limit: inboundLimit,
               remote: webUiOptions.remote,
@@ -690,7 +755,7 @@ write_main_injection_chunk() {
             if (packet?.kind === "message-from-view") {
               const payload = packet.payload;
               if (!payload || typeof payload.type !== "string") return;
-              await context.handleMessage(bridgeWindow.webContents, payload);
+              await webUiDispatchMessageFromView(bridgeWindow, context, payload);
               if (payload.type === "ready") {
                 broadcast({
                   kind: "message-for-view",
@@ -720,8 +785,8 @@ write_main_injection_chunk() {
               return;
             }
           } catch (err) {
-            Xt().warning("WebUI bridge dispatch failed", {
-              message: we(err),
+            webUiLogger.warning("WebUI bridge dispatch failed", {
+              message: webUiFormatError(err),
             });
             ws.send(
               JSON.stringify({
@@ -746,7 +811,7 @@ write_main_injection_chunk() {
       });
     });
 
-    Xt().info("WebUI bridge started", {
+    webUiLogger.info("WebUI bridge started", {
       host,
       port: webUiOptions.port,
       remote: webUiOptions.remote,
@@ -755,7 +820,7 @@ write_main_injection_chunk() {
     });
 
     if (authRequired) {
-      Xt().info("WebUI access token", { token });
+      webUiLogger.info("WebUI access token", { token });
     }
 
     return {
@@ -790,24 +855,17 @@ write_main_injection_chunk() {
       if (!primaryWindow) throw new Error("Timed out waiting for primary window");
 
       webUiBridgeWindow = primaryWindow;
-
-      try {
-        primaryWindow.hide();
-      } catch {}
+      webUiForceWindowHidden(primaryWindow);
 
       const preventClose = (event) => {
         if (!Vt.isAppQuitting) {
           event.preventDefault();
-          try {
-            primaryWindow.hide();
-          } catch {}
+          webUiForceWindowHidden(primaryWindow);
         }
       };
       primaryWindow.on("close", preventClose);
       primaryWindow.on("minimize", () => {
-        try {
-          primaryWindow.hide();
-        } catch {}
+        webUiForceWindowHidden(primaryWindow);
       });
 
       webUiRuntime = await webUiStartBridgeRuntime({
@@ -824,23 +882,20 @@ write_main_injection_chunk() {
   L.app.on("browser-window-created", (_event, win) => {
     if (!webUiOptions.enabled) return;
     if (win && !win.isDestroyed()) {
+      webUiForceWindowHidden(win);
       win.once("ready-to-show", () => {
-        try {
-          win.hide();
-        } catch {}
+        webUiForceWindowHidden(win);
       });
       setImmediate(() => {
-        try {
-          win.hide();
-        } catch {}
+        webUiForceWindowHidden(win);
       });
     }
   });
 
   L.app.whenReady().then(() => {
-    webUiStart().catch((err) => {
-      Xt().warning("WebUI runtime start failed", {
-        message: we(err),
+      webUiStart().catch((err) => {
+        webUiLogger.warning("WebUI runtime start failed", {
+        message: webUiFormatError(err),
       });
     });
   });
@@ -849,17 +904,15 @@ write_main_injection_chunk() {
     if (!webUiOptions.enabled) return;
     const win = webUiBridgeWindow ?? Vt.getPrimaryWindow(Pt);
     if (win && !win.isDestroyed()) {
-      try {
-        win.hide();
-      } catch {}
+      webUiForceWindowHidden(win);
     }
   });
 
   L.app.on("will-quit", () => {
     if (webUiRuntime && typeof webUiRuntime.dispose === "function") {
       webUiRuntime.dispose().catch((err) => {
-        Xt().warning("WebUI shutdown failed", {
-          message: we(err),
+        webUiLogger.warning("WebUI shutdown failed", {
+          message: webUiFormatError(err),
         });
       });
       webUiRuntime = null;
@@ -902,15 +955,29 @@ const fs = require("node:fs");
 const rendererFile = process.argv[2];
 let source = fs.readFileSync(rendererFile, "utf8");
 
+// Older bundle shape (kept for compatibility).
 const find = "if(!v)return;const M=v.roots.map(A4),A=g.current;";
 const replace = "if(!v||!Array.isArray(v.roots))return;const M=v.roots.map(A4),A=g.current;";
-
-if (!source.includes(find)) {
-  console.error("Renderer guard patch anchor not found.");
-  process.exit(1);
+if (source.includes(find)) {
+  source = source.replace(find, replace);
+  fs.writeFileSync(rendererFile, source, "utf8");
+  process.exit(0);
 }
 
-source = source.replace(find, replace);
+// Newer bundle shape where minified variable names change between builds.
+const generic = /if\(!([A-Za-z_$][\w$]*)\)return;const ([A-Za-z_$][\w$]*)=\1\.roots\.map\(A4\),([A-Za-z_$][\w$]*)=([A-Za-z_$][\w$]*)\.current;/;
+if (generic.test(source)) {
+  source = source.replace(
+    generic,
+    "if(!$1||!Array.isArray($1.roots))return;const $2=$1.roots.map(A4),$3=$4.current;"
+  );
+  fs.writeFileSync(rendererFile, source, "utf8");
+  process.exit(0);
+}
+
+console.error("Renderer guard patch anchor not found.");
+process.exit(1);
+
 fs.writeFileSync(rendererFile, source, "utf8");
 NODE
 }
@@ -981,7 +1048,7 @@ patch_renderer_bundle "$APP_DIR/webview/assets/$target_renderer_js_rel"
 cp "$BRIDGE_PATH" "$APP_DIR/webview/webui-bridge.js"
 
 rg -q -- '__CODEX_WEBUI_RUNTIME_PATCH__' "$APP_DIR/.vite/build/$target_main_js_rel" || { echo "Patched main missing runtime marker" >&2; exit 1; }
-rg -Fq -- '!Array.isArray(v.roots)' "$APP_DIR/webview/assets/$target_renderer_js_rel" || { echo "Patched renderer missing roots guard" >&2; exit 1; }
+rg -q -- '!Array\.isArray\([[:alnum:]_$]+\.roots\)' "$APP_DIR/webview/assets/$target_renderer_js_rel" || { echo "Patched renderer missing roots guard" >&2; exit 1; }
 rg -q 'sendMessageFromView' "$APP_DIR/webview/webui-bridge.js" || { echo "Bridge file looks invalid" >&2; exit 1; }
 
 CMD=(npx electron "--user-data-dir=$USER_DATA_DIR" "$APP_DIR" --webui --port "$PORT")
@@ -1005,7 +1072,6 @@ export CUSTOM_CLI_PATH="$CLI_PATH"
 
 echo "App dir: $APP_DIR"
 echo "User data dir: $USER_DATA_DIR"
-echo "WebUI port: $PORT (derived from $(pwd -P))"
 printf 'Command:'; printf ' %q' "${CMD[@]}"; echo
 
 if [[ "$NO_OPEN" -eq 0 ]]; then
