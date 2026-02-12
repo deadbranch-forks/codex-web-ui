@@ -12,7 +12,6 @@ KEEP_TEMP=0
 NO_OPEN=0
 USER_DATA_DIR=""
 BRIDGE_PATH="$(cd "$(dirname "$0")" && pwd)/webui-bridge.js"
-SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 
 usage() {
   cat <<'USAGE'
@@ -101,11 +100,9 @@ write_main_injection_chunk() {
   if (!webUiOptions.enabled) return;
 
   const http = require("node:http");
-  const net = require("node:net");
   const fs = require("node:fs");
   const path = require("node:path");
   const crypto = require("node:crypto");
-  const { spawn } = require("node:child_process");
   const { EventEmitter } = require("node:events");
   function webUiFormatError(err) {
     if (!err) return "Unknown error";
@@ -497,53 +494,6 @@ write_main_injection_chunk() {
     const originAllowlist = new Set(webUiOptions.origins);
     const sockets = new Set();
     let cachedIndexHtml = "";
-    let spawnInFlightPromise = null;
-
-    const webUiFindFreePort = () =>
-      new Promise((resolve, reject) => {
-        const srv = net.createServer();
-        srv.once("error", reject);
-        srv.listen(0, "127.0.0.1", () => {
-          const address = srv.address();
-          const port = typeof address === "object" && address ? address.port : 0;
-          srv.close((closeErr) => {
-            if (closeErr) reject(closeErr);
-            else if (port > 0) resolve(port);
-            else reject(new Error("Failed to allocate free port"));
-          });
-        });
-      });
-
-    const webUiSpawnDedicatedInstance = async () => {
-      if (spawnInFlightPromise) return spawnInFlightPromise;
-      spawnInFlightPromise = (async () => {
-        const launcherPath = process.env.CODEX_WEBUI_LAUNCHER_PATH;
-        if (!launcherPath) throw new Error("CODEX_WEBUI_LAUNCHER_PATH is not set");
-
-        const nextPort = await webUiFindFreePort();
-        const args = [launcherPath, "--no-open", "--port", String(nextPort)];
-        if (webUiOptions.remote) args.push("--remote");
-        if (webUiOptions.token) args.push("--token", webUiOptions.token);
-        if (webUiOptions.origins.length > 0) args.push("--origins", webUiOptions.origins.join(","));
-
-        const child = spawn("bash", args, {
-          detached: true,
-          stdio: "ignore",
-          env: {
-            ...process.env,
-            CODEX_WEBUI_PORT: String(nextPort),
-          },
-        });
-        child.unref();
-        return `http://127.0.0.1:${nextPort}/`;
-      })();
-
-      try {
-        return await spawnInFlightPromise;
-      } finally {
-        spawnInFlightPromise = null;
-      }
-    };
 
     const originAllowed = (origin, hostHeader) => {
       if (typeof origin !== "string") return false;
@@ -744,34 +694,17 @@ write_main_injection_chunk() {
       }
 
       wss.handleUpgrade(req, socket, head, (ws) => {
-        if (sockets.size > 0) {
-          webUiSpawnDedicatedInstance()
-            .then((url) => {
-              ws.send(
-                JSON.stringify({
-                  kind: "open-new-instance",
-                  url,
-                }),
-                () => {
-                  ws.close(1013, "Use dedicated instance");
-                },
-              );
-            })
-            .catch((err) => {
-              webUiLogger.warning("WebUI dedicated instance spawn failed", {
-                message: webUiFormatError(err),
-              });
-              ws.send(
-                JSON.stringify({
-                  kind: "bridge-error",
-                  message: "Multiple tabs detected; failed to spawn dedicated instance",
-                }),
-                () => {
-                  ws.close(1013, "Use dedicated instance");
-                },
-              );
-            });
-          return;
+        // Single active client policy: newer tab takes over and prior tabs are disconnected.
+        for (const existing of sockets) {
+          try {
+            existing.send(
+              JSON.stringify({
+                kind: "bridge-error",
+                message: "Another tab took over this session",
+              }),
+            );
+            existing.close(1012, "Replaced by newer client tab");
+          } catch {}
         }
 
         sockets.add(ws);
@@ -1136,7 +1069,6 @@ unset ELECTRON_RUN_AS_NODE
 export ELECTRON_FORCE_IS_PACKAGED=true
 export CODEX_CLI_PATH="$CLI_PATH"
 export CUSTOM_CLI_PATH="$CLI_PATH"
-export CODEX_WEBUI_LAUNCHER_PATH="$SCRIPT_PATH"
 
 echo "App dir: $APP_DIR"
 echo "User data dir: $USER_DATA_DIR"
