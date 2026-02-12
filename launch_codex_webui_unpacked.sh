@@ -4,7 +4,18 @@ set -euo pipefail
 APP_PATH="/Applications/Codex.app"
 APP_ASAR="$APP_PATH/Contents/Resources/app.asar"
 CLI_PATH="$APP_PATH/Contents/Resources/codex"
-PORT="${CODEX_WEBUI_PORT:-4310}"
+# Derive a deterministic port from the running directory path.
+# Hash the absolute path of the current working directory and map it into
+# the range 10000-59999 so each project directory gets its own port by default.
+_dir_hash_port() {
+  local dir_path
+  dir_path="$(pwd -P)"
+  # Use a simple portable hash: sum of bytes mod range + base
+  local hash
+  hash=$(printf '%s' "$dir_path" | cksum | awk '{print $1}')
+  echo $(( (hash % 50000) + 10000 ))
+}
+PORT="${CODEX_WEBUI_PORT:-$(_dir_hash_port)}"
 REMOTE=0
 TOKEN=""
 ORIGINS=""
@@ -45,10 +56,19 @@ write_main_injection_chunk() {
     return Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : fallback;
   }
 
+  function webUiDirHashPort(dirPath) {
+    // Derive a deterministic port from a directory path.
+    // Mirrors the bash _dir_hash_port logic: sum bytes, mod 50000, + 10000.
+    let hash = 0;
+    const buf = Buffer.from(dirPath || process.cwd());
+    for (let i = 0; i < buf.length; i++) hash = (hash + buf[i]) | 0;
+    return ((((hash % 50000) + 50000) % 50000) + 10000);
+  }
+
   function webUiParseCliOptions(argv = process.argv, env = process.env) {
     let enabled = false;
     let remote = false;
-    let port = webUiParsePortArg(env.CODEX_WEBUI_PORT, 3210);
+    let port = webUiParsePortArg(env.CODEX_WEBUI_PORT, webUiDirHashPort(process.cwd()));
     let token = (env.CODEX_WEBUI_TOKEN ?? "").trim();
     let origins = (env.CODEX_WEBUI_ORIGINS ?? "")
       .split(",")
@@ -985,6 +1005,7 @@ export CUSTOM_CLI_PATH="$CLI_PATH"
 
 echo "App dir: $APP_DIR"
 echo "User data dir: $USER_DATA_DIR"
+echo "WebUI port: $PORT (derived from $(pwd -P))"
 printf 'Command:'; printf ' %q' "${CMD[@]}"; echo
 
 if [[ "$NO_OPEN" -eq 0 ]]; then
