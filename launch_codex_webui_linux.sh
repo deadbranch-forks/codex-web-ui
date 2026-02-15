@@ -10,6 +10,7 @@ ORIGINS=""
 KEEP_TEMP=0
 USER_DATA_DIR=""
 BRIDGE_PATH="$(cd "$(dirname "$0")" && pwd)/webui-bridge.js"
+ORIGINAL_ARGS=("$@")
 
 usage() {
   cat <<'USAGE'
@@ -1063,6 +1064,20 @@ while (($#)); do
       EXTRA_ARGS+=("$1"); shift ;;
   esac
 done
+
+# SSH/headless fallback:
+# If DISPLAY is not available, transparently relaunch under xvfb-run so
+# `bash launch_codex_webui_linux.sh` works over SSH.
+if [[ -z "${DISPLAY:-}" && "${CODEX_WEBUI_XVFB_WRAPPED:-0}" != "1" ]]; then
+  if command -v xvfb-run >/dev/null 2>&1; then
+    echo "No DISPLAY detected; relaunching under xvfb-run with Electron sandbox disabled."
+    exec env CODEX_WEBUI_XVFB_WRAPPED=1 ELECTRON_DISABLE_SANDBOX=1 xvfb-run -a bash "$0" "${ORIGINAL_ARGS[@]}"
+  else
+    echo "No DISPLAY detected and xvfb-run is not installed." >&2
+    echo "Install xvfb or run with a graphical DISPLAY." >&2
+    exit 1
+  fi
+fi
 
 resolve_app_paths "$APP_PATH"
 
