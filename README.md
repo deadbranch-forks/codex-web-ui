@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🔓 Codex SSH Unlocker
+# 🌐 Codex App Web UI Enabler
 
-### 🚀 Unlock the Hidden SSH Superpower Inside OpenAI Codex Desktop 🚀
+### 🚀 Run OpenAI Codex Desktop in Your Browser — From Any Device 🚀
 
 [![Shell Script](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnubash&logoColor=white&style=for-the-badge)](https://www.gnu.org/software/bash/)
 [![Electron](https://img.shields.io/badge/Electron-Patched-47848F?logo=electron&logoColor=white&style=for-the-badge)](https://www.electronjs.org/)
@@ -18,21 +18,21 @@
 
 <br />
 
-> **Codex Desktop has a fully-built SSH remote execution engine hidden inside it.**
-> **It's compiled. It's shipped. It's just... turned off.**
+> **Codex Desktop's full UI — chat, skills, file editing, code execution —**
+> **accessible from any browser on any device. No Electron window required.**
 >
-> **We turned it back on.** 🔑
+> **One script. Full Web UI. Anywhere.** 🌍
 
 <br />
 
 ```
-   ██████╗ ██████╗ ██████╗ ███████╗██╗  ██╗    ███████╗███████╗██╗  ██╗
-  ██╔════╝██╔═══██╗██╔══██╗██╔════╝╚██╗██╔╝    ██╔════╝██╔════╝██║  ██║
-  ██║     ██║   ██║██║  ██║█████╗   ╚███╔╝     ███████╗███████╗███████║
-  ██║     ██║   ██║██║  ██║██╔══╝   ██╔██╗     ╚════██║╚════██║██╔══██║
-  ╚██████╗╚██████╔╝██████╔╝███████╗██╔╝ ╚██╗   ███████║███████║██║  ██║
-   ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝   ╚══════╝╚══════╝╚═╝  ╚═╝
-                    U N L O C K E R
+   ██████╗ ██████╗ ██████╗ ███████╗██╗  ██╗   ██╗    ██╗███████╗██████╗    ██╗   ██╗██╗
+  ██╔════╝██╔═══██╗██╔══██╗██╔════╝╚██╗██╔╝   ██║    ██║██╔════╝██╔══██╗   ██║   ██║██║
+  ██║     ██║   ██║██║  ██║█████╗   ╚███╔╝    ██║ █╗ ██║█████╗  ██████╔╝   ██║   ██║██║
+  ██║     ██║   ██║██║  ██║██╔══╝   ██╔██╗    ██║███╗██║██╔══╝  ██╔══██╗   ██║   ██║██║
+  ╚██████╗╚██████╔╝██████╔╝███████╗██╔╝ ╚██╗  ╚███╔███╔╝███████╗██████╔╝   ╚██████╔╝██║
+   ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝   ╚══╝╚══╝ ╚══════╝╚═════╝    ╚═════╝ ╚═╝
+                    E N A B L E R
 ```
 
 </div>
@@ -41,15 +41,15 @@
 
 ## 🤯 What Is This?
 
-OpenAI shipped Codex Desktop with a **complete SSH remote execution engine** baked into the Electron binary — remote command execution, remote `git apply`, remote Codex home resolution — the whole nine yards. But the UI to activate it? **Nowhere to be found.**
+OpenAI's Codex Desktop is a powerful AI coding agent — but it's locked inside an Electron window on a single machine. What if you could access it **from any browser, on any device, anywhere on your network?**
 
-We reverse-engineered the minified Electron bundle, found the dormant SSH pathways, and built a set of scripts that **patch the app at runtime** to unlock everything.
+We reverse-engineered the minified Electron bundle and built scripts that **patch the app at runtime** to expose the full Codex UI over HTTP + WebSocket. The same scripts also unlock a **hidden SSH remote execution engine** that was already compiled into the binary but never wired up.
 
-**One command. Full remote control. No recompilation.**
+**One command. Full Web UI. Plus SSH remote control. No recompilation.**
 
 ---
 
-## 📱 See It In Action — Controlling Mac From Mobile
+## 📱 See It In Action — Codex in Your Browser, From Any Device
 
 > **Yes, that's a phone. Yes, that's Codex. Yes, it's running on a Mac across the network.**
 
@@ -74,28 +74,30 @@ We reverse-engineered the minified Electron bundle, found the dormant SSH pathwa
 </table>
 </div>
 
-> 🤯 **This is not a mockup.** This is a real Codex Desktop instance running on macOS, patched with our scripts, accessed from a mobile phone browser over Tailscale. Every feature works — chat, skills, file editing, code execution — all from your pocket.
+> 🤯 **This is not a mockup.** This is a real Codex Desktop instance running on macOS, patched with our Web UI Enabler scripts, accessed from a mobile phone browser over Tailscale. Every feature works — chat, skills, file editing, code execution — all from your pocket.
 
 ---
 
 ## 🌍 What Can You Actually Do With This?
 
-Once SSH mode is unlocked, Codex becomes a **remote orchestration powerhouse**:
+With the Web UI enabled, Codex breaks free from the Electron window — and with SSH mode unlocked, it reaches **any machine you own**:
 
 | 🎯 Use Case | 💡 Description |
 |---|---|
+| 📱 **Code From Your Phone** | Open Codex in any mobile browser — full chat, skills, file editing, code execution |
+| 💻 **Use Any Browser** | Chrome, Firefox, Safari, Arc — no Electron install needed on the client |
+| 🌐 **Access Over the Network** | Tailscale, LAN, VPN — access your Codex instance from anywhere securely |
 | 🖥️ **Control Your Mac Remotely** | SSH into your MacBook from anywhere and let Codex operate it as if you're sitting in front of it |
 | 🐧 **Orchestrate Linux Servers** | Point Codex at your Ubuntu/Debian/Arch boxes and run AI-powered coding sessions remotely |
 | 🪟 **Manage Windows via WSL** | Connect through WSL2 SSH and bring Codex intelligence to your Windows dev environment |
 | 🏠 **Command Your Homelab** | Proxmox, TrueNAS, Raspberry Pi clusters — Codex becomes your AI sysadmin |
-| 🐙 **Orchestrate OpenClaw** | Deploy and manage OpenClaw instances across your infrastructure with AI-assisted workflows |
 | ☁️ **Cloud Fleet Management** | AWS EC2, Oracle Cloud, DigitalOcean droplets — manage entire fleets from one Codex window |
 | 🔧 **Web Service Orchestration** | Nginx configs, Docker containers, systemd services — edit and deploy across machines |
 | 🧪 **Remote CI/CD Pipelines** | Trigger builds, inspect logs, fix failing tests on remote CI runners in real-time |
 | 📡 **IoT & Edge Devices** | SSH into Raspberry Pis, Jetson Nanos, or any edge device and code directly on them |
 | 🏗️ **Multi-Machine Refactoring** | Coordinate code changes across microservices running on different hosts simultaneously |
 
-> **TL;DR:** If it has an SSH port, Codex can now control it. Your entire infrastructure becomes one AI-powered IDE. 🧠
+> **TL;DR:** Codex in your browser + SSH to any machine = your entire infrastructure as one AI-powered IDE. 🧠
 
 ---
 
@@ -106,14 +108,14 @@ Once SSH mode is unlocked, Codex becomes a **remote orchestration powerhouse**:
 git clone https://github.com/friuns2/codex-unpacked-toolkit.git
 cd codex-unpacked-toolkit
 
-# 🔓 Launch Codex with SSH mode unlocked (connects to your remote host)
-./launch_codex_unpacked.sh --ssh-host user@your-server.com
-
-# 🌐 Or launch the WebUI and control everything from your browser
+# 🌐 Launch the Web UI — access Codex from any browser
 ./launch_codex_webui_unpacked.sh --port 5999
+
+# 🔓 Or launch with SSH mode unlocked (connects to your remote host)
+./launch_codex_unpacked.sh --ssh-host user@your-server.com
 ```
 
-Then open `http://127.0.0.1:5999/` and you're flying. ✈️
+Open `http://127.0.0.1:5999/` and you're flying. ✈️
 
 ---
 
@@ -121,8 +123,8 @@ Then open `http://127.0.0.1:5999/` and you're flying. ✈️
 
 ```
 codex-unpacked-toolkit/
-├── 🔧 launch_codex_unpacked.sh          # SSH unlock & debug launcher
 ├── 🌐 launch_codex_webui_unpacked.sh     # WebUI mode launcher (browser access)
+├── 🔧 launch_codex_unpacked.sh          # SSH unlock & debug launcher
 ├── 🔌 webui-bridge.js                    # Browser-side WebSocket ↔ IPC bridge
 ├── 📖 PROJECT_STATE.md                    # Living project state & patching reference
 ├── 📂 images/                            # Screenshots & proof it works
@@ -135,48 +137,9 @@ codex-unpacked-toolkit/
 
 ---
 
-## 🔧 `launch_codex_unpacked.sh` — The SSH Unlocker
-
-> **The main event.** This script extracts, patches, and launches Codex with the hidden SSH feature fully activated.
-
-### What It Does
-
-1. 📦 **Extracts `app.asar`** — Unpacks the Codex Electron bundle into a temp directory using `@electron/asar`
-2. 🔑 **Injects SSH host into global state** — Writes your SSH host into `.codex-global-state.json` so the app recognizes it as a configured remote
-3. 🧬 **Patches the main bundle** — Performs a surgical AST-level patch on the minified `main-*.js` to auto-select the SSH host on startup (finds the startup sequence and rewires it to check `electron-ssh-hosts` first)
-4. 🔍 **Enables Node Inspector** — Launches with `--inspect` for live debugging (port 9229 by default)
-5. 🌐 **Enables Chromium Remote Debug** — Opens `--remote-debugging-port` (9222) for DevTools Protocol access
-6. ✅ **SSH preflight check** — Validates connectivity to your host with `BatchMode=yes` and `ConnectTimeout=6` before launching
-7. 🧹 **Auto-cleanup** — Temp directory is removed on exit (unless `--keep-temp`)
-
-### Options
-
-```
---app <path>                 Custom Codex.app path (default: /Applications/Codex.app)
---user-data-dir <path>       Chromium user data dir override
---inspect-port <n>           Node inspector port (default: 9229)
---remote-debug-port <n>      Chromium remote debug port (default: 9222)
---ssh-host <user@host>       The SSH host to unlock and auto-connect 🔑
---no-inspect                 Disable Node inspector
---no-remote-debug            Disable Chromium remote debugging
---keep-temp                  Keep extracted app dir for inspection
-```
-
-### Example
-
-```bash
-# Unlock SSH to your homelab server with custom ports
-./launch_codex_unpacked.sh \
-  --ssh-host ubuntu@192.168.1.100 \
-  --inspect-port 9230 \
-  --remote-debug-port 9223
-```
-
----
-
 ## 🌐 `launch_codex_webui_unpacked.sh` — Browser-Based Codex
 
-> **Run Codex in your browser.** No Electron window needed. Access from any device on your network.
+> **The main event.** Run Codex in your browser. No Electron window needed. Access from any device on your network.
 
 ### What It Does
 
@@ -228,6 +191,45 @@ codex-unpacked-toolkit/
 
 ---
 
+## 🔧 `launch_codex_unpacked.sh` — The SSH Unlocker
+
+> **Bonus superpower.** This script extracts, patches, and launches Codex with the hidden SSH remote execution feature fully activated.
+
+### What It Does
+
+1. 📦 **Extracts `app.asar`** — Unpacks the Codex Electron bundle into a temp directory using `@electron/asar`
+2. 🔑 **Injects SSH host into global state** — Writes your SSH host into `.codex-global-state.json` so the app recognizes it as a configured remote
+3. 🧬 **Patches the main bundle** — Performs a surgical AST-level patch on the minified `main-*.js` to auto-select the SSH host on startup (finds the startup sequence and rewires it to check `electron-ssh-hosts` first)
+4. 🔍 **Enables Node Inspector** — Launches with `--inspect` for live debugging (port 9229 by default)
+5. 🌐 **Enables Chromium Remote Debug** — Opens `--remote-debugging-port` (9222) for DevTools Protocol access
+6. ✅ **SSH preflight check** — Validates connectivity to your host with `BatchMode=yes` and `ConnectTimeout=6` before launching
+7. 🧹 **Auto-cleanup** — Temp directory is removed on exit (unless `--keep-temp`)
+
+### Options
+
+```
+--app <path>                 Custom Codex.app path (default: /Applications/Codex.app)
+--user-data-dir <path>       Chromium user data dir override
+--inspect-port <n>           Node inspector port (default: 9229)
+--remote-debug-port <n>      Chromium remote debug port (default: 9222)
+--ssh-host <user@host>       The SSH host to unlock and auto-connect 🔑
+--no-inspect                 Disable Node inspector
+--no-remote-debug            Disable Chromium remote debugging
+--keep-temp                  Keep extracted app dir for inspection
+```
+
+### Example
+
+```bash
+# Unlock SSH to your homelab server with custom ports
+./launch_codex_unpacked.sh \
+  --ssh-host ubuntu@192.168.1.100 \
+  --inspect-port 9230 \
+  --remote-debug-port 9223
+```
+
+---
+
 ## 🔌 `webui-bridge.js` — The Browser-Side Bridge
 
 > **Makes the browser think it's Electron.** Replaces `window.electronBridge` with a WebSocket-backed implementation.
@@ -249,7 +251,7 @@ codex-unpacked-toolkit/
 
 > See the full reverse-engineering findings in [`PROJECT_STATE.md` § 9](PROJECT_STATE.md#9-ssh-reverse-engineering-findings)
 
-We extracted the `app.asar`, deobfuscated the minified bundles, and traced the execution paths. Here's what we found hiding in plain sight:
+We extracted the `app.asar`, deobfuscated the minified bundles, and traced the execution paths. Along the way we discovered a fully-built SSH remote execution engine hidden inside the binary. Here's what we found:
 
 | 🔎 Discovery | 📝 Detail |
 |---|---|
@@ -315,8 +317,9 @@ We extracted the `app.asar`, deobfuscated the minified bundles, and traced the e
 
 - 🍎 **macOS** with Codex Desktop installed (or custom `--app` path)
 - 📦 **Node.js** and **npx** available in PATH
-- 🔑 **SSH key-based auth** configured for your target host (no password prompts — `BatchMode=yes`)
-- 🖥️ Target host with `~/.codex` directory (or `$CODEX_HOME` set)
+- 🌐 **A modern browser** (Chrome, Firefox, Safari, Arc, etc.) for Web UI access
+- 🔑 **SSH key-based auth** configured for your target host — only needed for SSH mode (`BatchMode=yes`)
+- 🖥️ Target host with `~/.codex` directory (or `$CODEX_HOME` set) — only needed for SSH mode
 
 ---
 
@@ -351,7 +354,7 @@ Found a new Codex version that breaks the patches? Bundle patterns change betwee
 
 ## ⭐ Star This Repo
 
-If you think AI should be able to reach **any machine you own** — not just the one it's installed on — [smash that star button](https://github.com/friuns2/codex-unpacked-toolkit). ⭐
+If you think Codex should be accessible **from any browser, on any device** — not just the Electron window it shipped in — [smash that star button](https://github.com/friuns2/codex-unpacked-toolkit). ⭐
 
 ---
 

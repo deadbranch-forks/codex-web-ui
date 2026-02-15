@@ -1,8 +1,8 @@
-# Agent Instructions — Codex SSH Unlocker
+# Agent Instructions — Codex App Web UI Enabler
 
 ## Project overview
 
-This repo contains scripts and patches that unlock hidden SSH remote-execution and WebUI browser-access features inside the OpenAI Codex Desktop Electron app. The key deliverables are two bash launchers (`launch_codex_unpacked.sh`, `launch_codex_webui_unpacked.sh`), a browser-side WebSocket bridge (`webui-bridge.js`), and the public-facing `README.md`.
+This repo contains scripts and patches that enable browser-based Web UI access and unlock hidden SSH remote-execution features inside the OpenAI Codex Desktop Electron app. The key deliverables are two bash launchers (`launch_codex_webui_unpacked.sh`, `launch_codex_unpacked.sh`), a browser-side WebSocket bridge (`webui-bridge.js`), and the public-facing `README.md`.
 
 ## PROJECT_STATE.md — the living reference
 
