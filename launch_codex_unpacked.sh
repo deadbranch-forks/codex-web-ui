@@ -11,6 +11,7 @@ REMOTE_DEBUG_PORT="${CODEX_REMOTE_DEBUG_PORT:-9222}"
 ENABLE_INSPECT=1
 ENABLE_REMOTE_DEBUG=1
 SSH_HOST=""
+AUTO_INSTALL_TOOLS="${AUTO_INSTALL_TOOLS:-1}"
 
 usage() {
   cat <<'USAGE'
@@ -35,6 +36,153 @@ parse_port() {
   [[ "$value" =~ ^[0-9]+$ ]] || return 1
   (( value >= 1 && value <= 65535 )) || return 1
   printf '%s\n' "$value"
+}
+
+activate_homebrew_path() {
+  if command -v brew >/dev/null 2>&1; then
+    eval "$(brew shellenv)" >/dev/null 2>&1 || true
+    return
+  fi
+  local brew_bin
+  for brew_bin in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [[ -x "$brew_bin" ]]; then
+      eval "$("$brew_bin" shellenv)" >/dev/null 2>&1 || export PATH="$(dirname "$brew_bin"):$PATH"
+      return
+    fi
+  done
+}
+
+ensure_homebrew() {
+  activate_homebrew_path
+  if command -v brew >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ "$AUTO_INSTALL_TOOLS" != "1" ]]; then
+    echo "Missing Homebrew (set AUTO_INSTALL_TOOLS=1 to allow auto-install)." >&2
+    return 1
+  fi
+
+  command -v curl >/dev/null 2>&1 || {
+    echo "curl is required to install Homebrew automatically." >&2
+    return 1
+  }
+
+  echo "Homebrew not found. Installing Homebrew..."
+  if ! NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
+    return 1
+  fi
+  activate_homebrew_path
+  command -v brew >/dev/null 2>&1 || {
+    echo "Homebrew install completed, but brew is still unavailable in PATH." >&2
+    return 1
+  }
+  return 0
+}
+
+ensure_brew_package() {
+  local command_name="$1"
+  local package_name="$2"
+  if command -v "$command_name" >/dev/null 2>&1; then
+    return
+  fi
+  ensure_homebrew || return 1
+  echo "Installing missing tool: $package_name"
+  brew list "$package_name" >/dev/null 2>&1 || brew install "$package_name" || return 1
+  activate_homebrew_path
+  command -v "$command_name" >/dev/null 2>&1 || {
+    echo "Failed to install required tool: $command_name" >&2
+    return 1
+  }
+  return 0
+}
+
+install_node_with_nvm() {
+  if [[ "$AUTO_INSTALL_TOOLS" != "1" ]]; then
+    return 1
+  fi
+  command -v curl >/dev/null 2>&1 || return 1
+
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
+    echo "Installing nvm (user-space) to bootstrap Node.js..."
+    if ! curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash >/dev/null; then
+      return 1
+    fi
+  fi
+
+  [[ -s "$NVM_DIR/nvm.sh" ]] || return 1
+  # shellcheck disable=SC1090
+  source "$NVM_DIR/nvm.sh" || return 1
+  nvm install --lts >/dev/null || return 1
+  nvm use --lts >/dev/null || return 1
+  command -v node >/dev/null 2>&1 && command -v npx >/dev/null 2>&1
+}
+
+install_node_with_fnm() {
+  if [[ "$AUTO_INSTALL_TOOLS" != "1" ]]; then
+    return 1
+  fi
+  command -v curl >/dev/null 2>&1 || return 1
+  command -v unzip >/dev/null 2>&1 || return 1
+
+  local fnm_dir="${FNM_DIR:-$HOME/.local/share/fnm}"
+  local fnm_bin="$fnm_dir/fnm"
+  if ! command -v fnm >/dev/null 2>&1; then
+    echo "Installing fnm (user-space) to bootstrap Node.js..."
+    local tag asset tmp_dir
+    tag="$(curl -fsSL https://api.github.com/repos/Schniz/fnm/releases/latest | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+    [[ -n "$tag" ]] || return 1
+    case "$(uname -s)" in
+      Darwin)
+        asset="fnm-macos.zip"
+        ;;
+      Linux)
+        case "$(uname -m)" in
+          arm64|aarch64) asset="fnm-arm64.zip" ;;
+          x86_64|amd64) asset="fnm-linux.zip" ;;
+          *) return 1 ;;
+        esac
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+    tmp_dir="$(mktemp -d)"
+    if ! curl -fsSL "https://github.com/Schniz/fnm/releases/download/$tag/$asset" -o "$tmp_dir/fnm.zip"; then
+      rm -rf "$tmp_dir"
+      return 1
+    fi
+    mkdir -p "$fnm_dir"
+    if ! unzip -oq "$tmp_dir/fnm.zip" -d "$fnm_dir"; then
+      rm -rf "$tmp_dir"
+      return 1
+    fi
+    chmod +x "$fnm_bin" >/dev/null 2>&1 || true
+    rm -rf "$tmp_dir"
+  fi
+
+  if [[ -x "$fnm_bin" ]]; then
+    export PATH="$fnm_dir:$PATH"
+  fi
+  command -v fnm >/dev/null 2>&1 || return 1
+
+  # shellcheck disable=SC2046
+  eval "$(fnm env --shell bash)" || return 1
+  fnm install --lts >/dev/null || return 1
+  fnm use --lts >/dev/null || return 1
+  command -v node >/dev/null 2>&1 && command -v npx >/dev/null 2>&1
+}
+
+ensure_required_tools() {
+  if ! command -v node >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1; then
+    ensure_brew_package node node || install_node_with_nvm || install_node_with_fnm || {
+      echo "Failed to install Node.js/npx automatically." >&2
+      exit 1
+    }
+  fi
+  command -v node >/dev/null 2>&1 || { echo "node is required" >&2; exit 1; }
+  command -v npx >/dev/null 2>&1 || { echo "npx is required" >&2; exit 1; }
 }
 
 upsert_ssh_host_in_global_state() {
@@ -149,7 +297,7 @@ done
 
 [[ -f "$APP_ASAR" ]] || { echo "Missing app.asar: $APP_ASAR" >&2; exit 1; }
 [[ -x "$CLI_PATH" ]] || { echo "Missing codex binary: $CLI_PATH" >&2; exit 1; }
-command -v npx >/dev/null 2>&1 || { echo "npx is required" >&2; exit 1; }
+ensure_required_tools
 
 WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/codex-unpacked.XXXXXX")"
 APP_DIR="$WORKDIR/app"

@@ -316,7 +316,12 @@ We extracted the `app.asar`, deobfuscated the minified bundles, and traced the e
 ## 🎯 Requirements
 
 - 🍎 **macOS** with Codex Desktop installed (or custom `--app` path)
-- 📦 **Node.js** and **npx** available in PATH
+- 📦 **Launcher dependencies are auto-installed** when missing:
+  - `node`/`npx` (both launchers)
+  - `ripgrep` (`launch_codex_webui_unpacked.sh`)
+  - via Homebrew bootstrap when `brew` is missing
+- 🌐 Internet access and `curl` available for automatic Homebrew/tool installation
+- ⚙️ Optional: set `AUTO_INSTALL_TOOLS=0` to disable auto-install behavior
 - 🌐 **A modern browser** (Chrome, Firefox, Safari, Arc, etc.) for Web UI access
 - 🔑 **SSH key-based auth** configured for your target host — only needed for SSH mode (`BatchMode=yes`)
 - 🖥️ Target host with `~/.codex` directory (or `$CODEX_HOME` set) — only needed for SSH mode

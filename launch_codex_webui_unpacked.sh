@@ -11,6 +11,7 @@ KEEP_TEMP=0
 NO_OPEN=0
 USER_DATA_DIR=""
 BRIDGE_PATH="$(cd "$(dirname "$0")" && pwd)/webui-bridge.js"
+AUTO_INSTALL_TOOLS="${AUTO_INSTALL_TOOLS:-1}"
 
 usage() {
   cat <<'USAGE'
@@ -28,6 +29,163 @@ Options:
   --keep-temp            keep temp extracted app dir
   -h, --help
 USAGE
+}
+
+activate_homebrew_path() {
+  if command -v brew >/dev/null 2>&1; then
+    eval "$(brew shellenv)" >/dev/null 2>&1 || true
+    return
+  fi
+  local brew_bin
+  for brew_bin in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [[ -x "$brew_bin" ]]; then
+      eval "$("$brew_bin" shellenv)" >/dev/null 2>&1 || export PATH="$(dirname "$brew_bin"):$PATH"
+      return
+    fi
+  done
+}
+
+ensure_homebrew() {
+  activate_homebrew_path
+  if command -v brew >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ "$AUTO_INSTALL_TOOLS" != "1" ]]; then
+    echo "Missing Homebrew (set AUTO_INSTALL_TOOLS=1 to allow auto-install)." >&2
+    return 1
+  fi
+
+  command -v curl >/dev/null 2>&1 || {
+    echo "curl is required to install Homebrew automatically." >&2
+    return 1
+  }
+
+  echo "Homebrew not found. Installing Homebrew..."
+  if ! NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
+    return 1
+  fi
+  activate_homebrew_path
+  command -v brew >/dev/null 2>&1 || {
+    echo "Homebrew install completed, but brew is still unavailable in PATH." >&2
+    return 1
+  }
+  return 0
+}
+
+ensure_brew_package() {
+  local command_name="$1"
+  local package_name="$2"
+  if command -v "$command_name" >/dev/null 2>&1; then
+    return
+  fi
+  ensure_homebrew || return 1
+  echo "Installing missing tool: $package_name"
+  brew list "$package_name" >/dev/null 2>&1 || brew install "$package_name" || return 1
+  activate_homebrew_path
+  command -v "$command_name" >/dev/null 2>&1 || {
+    echo "Failed to install required tool: $command_name" >&2
+    return 1
+  }
+  return 0
+}
+
+install_node_with_nvm() {
+  if [[ "$AUTO_INSTALL_TOOLS" != "1" ]]; then
+    return 1
+  fi
+  command -v curl >/dev/null 2>&1 || return 1
+
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
+    echo "Installing nvm (user-space) to bootstrap Node.js..."
+    if ! curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash >/dev/null; then
+      return 1
+    fi
+  fi
+
+  [[ -s "$NVM_DIR/nvm.sh" ]] || return 1
+  # shellcheck disable=SC1090
+  source "$NVM_DIR/nvm.sh" || return 1
+  nvm install --lts >/dev/null || return 1
+  nvm use --lts >/dev/null || return 1
+  command -v node >/dev/null 2>&1 && command -v npx >/dev/null 2>&1
+}
+
+install_node_with_fnm() {
+  if [[ "$AUTO_INSTALL_TOOLS" != "1" ]]; then
+    return 1
+  fi
+  command -v curl >/dev/null 2>&1 || return 1
+  command -v unzip >/dev/null 2>&1 || return 1
+
+  local fnm_dir="${FNM_DIR:-$HOME/.local/share/fnm}"
+  local fnm_bin="$fnm_dir/fnm"
+  if ! command -v fnm >/dev/null 2>&1; then
+    echo "Installing fnm (user-space) to bootstrap Node.js..."
+    local tag asset tmp_dir
+    tag="$(curl -fsSL https://api.github.com/repos/Schniz/fnm/releases/latest | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+    [[ -n "$tag" ]] || return 1
+    case "$(uname -s)" in
+      Darwin)
+        asset="fnm-macos.zip"
+        ;;
+      Linux)
+        case "$(uname -m)" in
+          arm64|aarch64) asset="fnm-arm64.zip" ;;
+          x86_64|amd64) asset="fnm-linux.zip" ;;
+          *) return 1 ;;
+        esac
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+    tmp_dir="$(mktemp -d)"
+    if ! curl -fsSL "https://github.com/Schniz/fnm/releases/download/$tag/$asset" -o "$tmp_dir/fnm.zip"; then
+      rm -rf "$tmp_dir"
+      return 1
+    fi
+    mkdir -p "$fnm_dir"
+    if ! unzip -oq "$tmp_dir/fnm.zip" -d "$fnm_dir"; then
+      rm -rf "$tmp_dir"
+      return 1
+    fi
+    chmod +x "$fnm_bin" >/dev/null 2>&1 || true
+    rm -rf "$tmp_dir"
+  fi
+
+  if [[ -x "$fnm_bin" ]]; then
+    export PATH="$fnm_dir:$PATH"
+  fi
+  command -v fnm >/dev/null 2>&1 || return 1
+
+  # shellcheck disable=SC2046
+  eval "$(fnm env --shell bash)" || return 1
+  fnm install --lts >/dev/null || return 1
+  fnm use --lts >/dev/null || return 1
+  command -v node >/dev/null 2>&1 && command -v npx >/dev/null 2>&1
+}
+
+ensure_required_tools() {
+  if ! command -v node >/dev/null 2>&1 || ! command -v npx >/dev/null 2>&1; then
+    ensure_brew_package node node || install_node_with_nvm || install_node_with_fnm || {
+      echo "Failed to install Node.js/npx automatically." >&2
+      exit 1
+    }
+  fi
+  command -v node >/dev/null 2>&1 || { echo "node is required" >&2; exit 1; }
+  command -v npx >/dev/null 2>&1 || { echo "npx is required" >&2; exit 1; }
+}
+
+has_pattern() {
+  local pattern="$1"
+  local file="$2"
+  if command -v rg >/dev/null 2>&1; then
+    rg -q -- "$pattern" "$file"
+  else
+    grep -Eq -- "$pattern" "$file"
+  fi
 }
 
 write_main_injection_chunk() {
@@ -1043,8 +1201,7 @@ done
 [[ -f "$APP_ASAR" ]] || { echo "Missing app.asar: $APP_ASAR" >&2; exit 1; }
 [[ -x "$CLI_PATH" ]] || { echo "Missing codex binary: $CLI_PATH" >&2; exit 1; }
 [[ -f "$BRIDGE_PATH" ]] || { echo "Missing standalone bridge file: $BRIDGE_PATH" >&2; exit 1; }
-command -v npx >/dev/null 2>&1 || { echo "npx is required" >&2; exit 1; }
-command -v node >/dev/null 2>&1 || { echo "node is required" >&2; exit 1; }
+ensure_required_tools
 
 WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/codex-webui-unpacked.XXXXXX")"
 APP_DIR="$WORKDIR/app"
@@ -1075,9 +1232,9 @@ patch_renderer_bundle "$APP_DIR/webview/assets/$target_renderer_js_rel"
 
 cp "$BRIDGE_PATH" "$APP_DIR/webview/webui-bridge.js"
 
-rg -q -- '__CODEX_WEBUI_RUNTIME_PATCH__' "$APP_DIR/.vite/build/$target_main_js_rel" || { echo "Patched main missing runtime marker" >&2; exit 1; }
-rg -q -- '!Array\.isArray\([[:alnum:]_$]+\.roots\)' "$APP_DIR/webview/assets/$target_renderer_js_rel" || { echo "Patched renderer missing roots guard" >&2; exit 1; }
-rg -q 'sendMessageFromView' "$APP_DIR/webview/webui-bridge.js" || { echo "Bridge file looks invalid" >&2; exit 1; }
+has_pattern '__CODEX_WEBUI_RUNTIME_PATCH__' "$APP_DIR/.vite/build/$target_main_js_rel" || { echo "Patched main missing runtime marker" >&2; exit 1; }
+has_pattern '!Array\.isArray\([[:alnum:]_$]+\.roots\)' "$APP_DIR/webview/assets/$target_renderer_js_rel" || { echo "Patched renderer missing roots guard" >&2; exit 1; }
+has_pattern 'sendMessageFromView' "$APP_DIR/webview/webui-bridge.js" || { echo "Bridge file looks invalid" >&2; exit 1; }
 
 CMD=(npx electron "--user-data-dir=$USER_DATA_DIR" "$APP_DIR" --webui --port "$PORT")
 if [[ -n "$TOKEN" ]]; then

@@ -18,8 +18,12 @@ Run these checks before launch:
 ```bash
 test -x ./launch_codex_unpacked.sh
 test -d /Applications/Codex.app
-command -v npx >/dev/null
 ```
+
+Tooling note:
+
+- The launcher auto-installs missing `node`/`npx` via Homebrew by default.
+- Set `AUTO_INSTALL_TOOLS=0` to disable auto-install behavior.
 
 If a custom app path is provided, verify it contains:
 
@@ -97,6 +101,5 @@ After launch, report:
 ## Troubleshooting
 
 - `Missing app.asar` or `Missing codex binary`: wrong `--app` path.
-- `npx is required`: install Node.js/npm tooling.
 - `SSH autostart patch anchor not found`: Codex bundle changed; script patch target must be updated.
 - SSH preflight warning: app can still launch, but remote host connection may fail in UI.

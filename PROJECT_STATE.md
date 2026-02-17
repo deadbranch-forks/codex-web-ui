@@ -9,6 +9,7 @@ Use `/Users/igor/.codex/worktrees/5b82/untitled folder 67/launch_codex_unpacked.
 - Node inspector enabled by default (`--inspect`)
 - Chromium CDP enabled by default (`--remote-debugging-port`)
 - Optional SSH host bootstrap via `--ssh-host <user@host>`
+- Automatic prerequisite bootstrap for launcher dependencies (Homebrew + required tools)
 
 ### SSH mode workflow
 
@@ -428,4 +429,88 @@ Use a free port to avoid EADDRINUSE:
 
 ```bash
 ./launch_codex_webui_unpacked.sh --port 6002
+```
+
+## 11) Auto-install Tool Bootstrap (Homebrew + required binaries)
+
+Both launchers now attempt to auto-install missing prerequisites instead of failing immediately.
+
+Updated files:
+
+- `/Users/igor/.codex/worktrees/5b82/untitled folder 67/launch_codex_unpacked.sh`
+- `/Users/igor/.codex/worktrees/5b82/untitled folder 67/launch_codex_webui_unpacked.sh`
+
+### Behavior
+
+1. Detect and activate Homebrew in PATH (`brew shellenv`, `/opt/homebrew/bin/brew`, `/usr/local/bin/brew`).
+2. If Homebrew is missing and `AUTO_INSTALL_TOOLS=1` (default), install Homebrew non-interactively.
+3. Install required packages via Homebrew when command probes fail.
+4. If Homebrew path fails (no admin/sudo), fall back to user-space Node bootstrap.
+5. Continue with normal launcher flow after dependencies are present.
+
+`AUTO_INSTALL_TOOLS` control:
+
+- Default: `AUTO_INSTALL_TOOLS=1` (auto-install enabled)
+- Disable auto-install: `AUTO_INSTALL_TOOLS=0`
+
+### Required tool mapping
+
+- `launch_codex_unpacked.sh`:
+  - tries Homebrew `node` install if `node`/`npx` is missing
+  - falls back to user-space `nvm` install (`nvm install --lts`) when Homebrew install is unavailable
+  - if `nvm` install fails, downloads user-space `fnm` binary directly from GitHub Releases and runs `fnm install --lts`
+- `launch_codex_webui_unpacked.sh`:
+  - tries Homebrew `node` install if `node`/`npx` is missing
+  - falls back to user-space `nvm` install (`nvm install --lts`) when Homebrew install is unavailable
+  - if `nvm` install fails, downloads user-space `fnm` binary directly from GitHub Releases and runs `fnm install --lts`
+  - uses `rg` if present, otherwise falls back to `grep -E` for patch validation checks
+
+### Known bootstrap failure signatures and fixes
+
+- Failure (macOS VM without admin): Homebrew install prints `Need sudo access on macOS ...`.
+- Failure (nvm install path): `You may be on a Mac, and need to install the Xcode Command Line Developer Tools.`
+- Failure (first fnm attempt): `.../.local/share/fnm/fnm: cannot execute binary file` when Linux asset was selected on macOS.
+- Fix: use OS-aware asset selection (`Darwin => fnm-macos.zip`, `Linux arm64 => fnm-arm64.zip`, `Linux x64 => fnm-linux.zip`).
+- Success signature after fix: `[webui] WebUI bridge started { host: '0.0.0.0', port: 6011, ... }` and HTTP probe returns `<!doctype html>`.
+
+### Injected helper pattern
+
+```bash
+ensure_homebrew() {
+  activate_homebrew_path
+  if command -v brew >/dev/null 2>&1; then return; fi
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  activate_homebrew_path
+}
+
+ensure_brew_package() {
+  local command_name="$1"
+  local package_name="$2"
+  command -v "$command_name" >/dev/null 2>&1 && return
+  ensure_homebrew
+  brew list "$package_name" >/dev/null 2>&1 || brew install "$package_name"
+}
+
+install_node_with_nvm() {
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash || return 1
+  [[ -s "$NVM_DIR/nvm.sh" ]] || return 1
+  source "$NVM_DIR/nvm.sh"
+  nvm install --lts || return 1
+  nvm use --lts || return 1
+}
+
+install_node_with_fnm() {
+  local fnm_dir="${FNM_DIR:-$HOME/.local/share/fnm}"
+  local tag asset
+  tag="$(curl -fsSL https://api.github.com/repos/Schniz/fnm/releases/latest | ...)"
+  # Darwin => fnm-macos.zip, Linux arm64 => fnm-arm64.zip, Linux x64 => fnm-linux.zip
+  asset="<platform-specific>"
+  curl -fsSL "https://github.com/Schniz/fnm/releases/download/$tag/$asset" -o "$tmp/fnm.zip" || return 1
+  unzip -oq "$tmp/fnm.zip" -d "$fnm_dir" || return 1
+  export PATH="$fnm_dir:$PATH"
+  eval "$(fnm env --shell bash)" || return 1
+  fnm install --lts || return 1
+  fnm use --lts || return 1
+}
 ```
