@@ -170,7 +170,7 @@ install_node_with_fnm() {
   # shellcheck disable=SC2046
   eval "$(fnm env --shell bash)" || return 1
   fnm install --lts >/dev/null || return 1
-  fnm use --lts >/dev/null || return 1
+  fnm use lts-latest >/dev/null || return 1
   command -v node >/dev/null 2>&1 && command -v npx >/dev/null 2>&1
 }
 

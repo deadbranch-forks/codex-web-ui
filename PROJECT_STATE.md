@@ -470,7 +470,9 @@ Updated files:
 - Failure (macOS VM without admin): Homebrew install prints `Need sudo access on macOS ...`.
 - Failure (nvm install path): `You may be on a Mac, and need to install the Xcode Command Line Developer Tools.`
 - Failure (first fnm attempt): `.../.local/share/fnm/fnm: cannot execute binary file` when Linux asset was selected on macOS.
+- Failure (fnm CLI mismatch): `error: unexpected argument '--lts' found` from `fnm use --lts`.
 - Fix: use OS-aware asset selection (`Darwin => fnm-macos.zip`, `Linux arm64 => fnm-arm64.zip`, `Linux x64 => fnm-linux.zip`).
+- Fix: use `fnm use lts-latest` (compatible with fnm 1.38.x) after `fnm install --lts`.
 - Success signature after fix: `[webui] WebUI bridge started { host: '0.0.0.0', port: 6011, ... }` and HTTP probe returns `<!doctype html>`.
 
 ### Injected helper pattern
